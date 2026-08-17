@@ -43,26 +43,26 @@ export const AI_RECOMMENDATIONS: AIRecommendation[] = [
     id: 'rec-1',
     type: 'CONGESTION',
     badge: 'AI',
-    title: 'Kanpur Junction at 94% capacity',
-    description: 'Immediate reroute recommended',
-    location: 'Kanpur Junction'
+    title: 'SHE-SKG section at 56.6% delay rate',
+    description: 'Worst performing section — prioritise slot clearance',
+    location: 'SHE-SKG Section'
   },
   {
     id: 'rec-2',
     type: 'PREDICTION',
     badge: 'AI',
-    title: 'Train 12967 — 18–25 min delay',
-    description: '87% confidence · Near Jhansi',
-    confidence: '87%',
-    location: 'Near Jhansi'
+    title: 'Freight train — 29.7 min delay forecast',
+    description: '100% confidence · SHE-SKG · Winter + Severe weather',
+    confidence: '100%',
+    location: 'SHE-SKG · Single Track'
   },
   {
     id: 'rec-3',
     type: 'REROUTE',
     badge: 'AI',
-    title: 'Train 12884 via Route B',
-    description: 'Saves 12 min · AI Verified',
-    savings: '12 min'
+    title: 'Express via BWN-GUS reroute B',
+    description: 'Saves 13 min · 86.9% AI confidence · Monsoon alert',
+    savings: '13 min'
   }
 ];
 
@@ -111,14 +111,15 @@ export const INITIAL_SIMULATION: SimulationState = {
   ]
 };
 
+// On-time % by day of week — derived from 50K-record dataset
 export const WEEKLY_PERFORMANCE: WeeklyData[] = [
-  { day: 'Mon', percentage: 78 },
-  { day: 'Tue', percentage: 83 },
-  { day: 'Wed', percentage: 81 },
-  { day: 'Thu', percentage: 84 },
-  { day: 'Fri', percentage: 84 },
-  { day: 'Sat', percentage: 79 },
-  { day: 'Sun', percentage: 84, highlight: true }
+  { day: 'Mon', percentage: 52 },
+  { day: 'Tue', percentage: 53 },
+  { day: 'Wed', percentage: 54 },
+  { day: 'Thu', percentage: 54 },
+  { day: 'Fri', percentage: 53 },
+  { day: 'Sat', percentage: 52 },
+  { day: 'Sun', percentage: 52, highlight: true }
 ];
 
 export const SYSTEM_DIAGNOSTICS: SystemDiagnostic[] = [

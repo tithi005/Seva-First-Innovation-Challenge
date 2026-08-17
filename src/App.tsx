@@ -10,6 +10,7 @@ import { Network } from './pages/Network';
 import { Operations } from './pages/Operations';
 import { Optimization } from './pages/Optimization';
 import { Analytics } from './pages/Analytics';
+import { Predict } from './pages/Predict';
 import { Settings } from './pages/Settings';
 import { SplashScreen } from './components/common/SplashScreen';
 
@@ -37,6 +38,8 @@ const AppContent: React.FC = () => {
         return <Optimization />;
       case 'Analytics':
         return <Analytics />;
+      case 'Predict':
+        return <Predict />;
       case 'Settings':
         return <Settings />;
       default:

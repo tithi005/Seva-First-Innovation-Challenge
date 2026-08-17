@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { useSystem } from '../../context/SystemContext';
-import { Menu, LayoutDashboard, Network, Activity, Zap, BarChart3, Settings as SettingsIcon } from 'lucide-react';
+import { Menu, LayoutDashboard, Network, Activity, Zap, BarChart3, FlaskConical, Settings as SettingsIcon } from 'lucide-react';
 import type { ActiveNav } from '../../types';
 
 interface NavItem {
@@ -10,12 +10,13 @@ interface NavItem {
 }
 
 const NAV_ITEMS: NavItem[] = [
-  { id: 'Dashboard', label: 'Dashboard', icon: LayoutDashboard },
-  { id: 'Network', label: 'Network', icon: Network },
-  { id: 'Operations', label: 'Operations', icon: Activity },
+  { id: 'Dashboard',    label: 'Dashboard',    icon: LayoutDashboard },
+  { id: 'Network',      label: 'Network',      icon: Network },
+  { id: 'Operations',   label: 'Operations',   icon: Activity },
   { id: 'Optimization', label: 'Optimization', icon: Zap },
-  { id: 'Analytics', label: 'Analytics', icon: BarChart3 },
-  { id: 'Settings', label: 'Settings', icon: SettingsIcon },
+  { id: 'Analytics',    label: 'Analytics',    icon: BarChart3 },
+  { id: 'Predict',      label: 'ML Inference', icon: FlaskConical },
+  { id: 'Settings',     label: 'Settings',     icon: SettingsIcon },
 ];
 
 export const Sidebar: React.FC = () => {

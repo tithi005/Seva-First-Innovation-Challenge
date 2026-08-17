@@ -103,4 +103,5 @@ export type ActiveNav =
   | 'Operations'
   | 'Optimization'
   | 'Analytics'
+  | 'Predict'
   | 'Settings';
