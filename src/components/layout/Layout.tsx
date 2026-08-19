@@ -2,6 +2,7 @@ import React from 'react';
 import { Sidebar } from './Sidebar';
 import { Header } from './Header';
 import { AlertsDrawer } from '../common/AlertsDrawer';
+import { SherlockChat } from '../common/SherlockChat';
 
 interface LayoutProps {
   children: React.ReactNode;
@@ -23,6 +24,9 @@ export const Layout: React.FC<LayoutProps> = ({ children }) => {
 
       {/* Global Alerts Flyout */}
       <AlertsDrawer />
+
+      {/* SHERLOCK AI Chat — always visible */}
+      <SherlockChat />
     </div>
   );
 };

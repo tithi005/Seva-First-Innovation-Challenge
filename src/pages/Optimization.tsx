@@ -4,7 +4,7 @@ import { useSystem } from '../context/SystemContext';
 import { useToast } from '../context/ToastContext';
 import { StatCard } from '../components/common/StatCard';
 import { StatusBadge } from '../components/common/StatusBadge';
-import { MoreHorizontal, BarChart3, Brain, Zap, Loader2 } from 'lucide-react';
+import { MoreHorizontal, BarChart3, Brain, Zap, Loader2, Sparkles } from 'lucide-react';
 import {
   DATASET_OVERVIEW,
   DELAY_BY_TRAIN_TYPE,
@@ -59,6 +59,8 @@ export const Optimization: React.FC = () => {
   const [optSchedule, setOptSchedule] = useState<any[] | null>(null);
   const [unoptimizedSchedule, setUnoptimizedSchedule] = useState<any[]>(INITIAL_UNOPTIMIZED);
   const [optMetrics, setOptMetrics] = useState<{ optWait: number, fifoWait: number, optMakespan: number, fifoMakespan: number } | null>(null);
+  const [aiInsights, setAiInsights] = useState<string | null>(null);
+  const [isGeneratingInsights, setIsGeneratingInsights] = useState(false);
   const isDark = useDarkMode();
 
   const runOptimizationSolver = async () => {
@@ -133,6 +135,30 @@ export const Optimization: React.FC = () => {
       
       setOptMetrics({ optWait, fifoWait, optMakespan, fifoMakespan });
       setSimStep(2);
+      
+      // 3. Generate GenAI Insights
+      setIsGeneratingInsights(true);
+      try {
+        const insightsRes = await fetch('http://localhost:8000/generate-insights', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            opt_wait: optWait,
+            fifo_wait: fifoWait,
+            opt_makespan: optMakespan,
+            fifo_makespan: fifoMakespan,
+            schedule: data.optimized.schedule
+          })
+        });
+        const insightsData = await insightsRes.json();
+        setAiInsights(insightsData.insights);
+      } catch (err) {
+        console.error("Failed to fetch insights", err);
+        setAiInsights("Failed to fetch insights from NVIDIA API.");
+      } finally {
+        setIsGeneratingInsights(false);
+      }
+      
     } catch (err) {
       addToast('Failed to reach OR-Tools API. Ensure uvicorn is running.', 'error');
       setSimStep(0);
@@ -308,6 +334,7 @@ export const Optimization: React.FC = () => {
                 setSimLogs(null);
                 setOptSchedule(null);
                 setOptMetrics(null);
+                setAiInsights(null);
               }
             }}
             disabled={isOptimizing}
@@ -412,6 +439,29 @@ export const Optimization: React.FC = () => {
                   Efficiency maintained despite massive ML penalties
                </div>
              </div>
+          </div>
+        )}
+
+        {/* AI Insights Panel */}
+        {(isGeneratingInsights || aiInsights) && (
+          <div className="p-5 border-t border-[rgba(15,44,92,0.08)] dark:border-white/5 bg-gradient-to-r from-[#2F5FD1]/5 to-[#8A2BE2]/5 dark:from-[#2F5FD1]/10 dark:to-[#8A2BE2]/10">
+            <div className="flex items-start gap-3">
+              <div className="flex-1">
+                <h4 className="text-sm font-bold text-[#0F2C5C] dark:text-white mb-1 flex items-center gap-2">
+                  AI Station Master Insights
+                </h4>
+                {isGeneratingInsights ? (
+                  <div className="text-sm text-gray-500 dark:text-gray-400 italic flex items-center gap-2">
+                    <Loader2 className="w-4 h-4 animate-spin" />
+                    Analyzing dispatch logs and calculating network impact...
+                  </div>
+                ) : (
+                  <p className="text-sm text-[#0F2C5C] dark:text-gray-300 leading-relaxed font-medium">
+                    {aiInsights}
+                  </p>
+                )}
+              </div>
+            </div>
           </div>
         )}
       </div>

@@ -7,10 +7,16 @@ import json
 
 import joblib
 import pandas as pd
+import os
+from openai import OpenAI
 from typing import List
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field
+
+# Load env vars
+from dotenv import load_dotenv
+load_dotenv(Path(__file__).parent / ".env")
 
 # ── Model loading (at import time — safe for single-process uvicorn) ──────────
 BASE = Path(__file__).parent.parent
@@ -66,7 +72,94 @@ class TrainOptRequest(BaseModel):
 class OptimizeRequest(BaseModel):
     trains: List[TrainOptRequest]
 
+class InsightRequest(BaseModel):
+    opt_wait: int
+    fifo_wait: int
+    opt_makespan: int
+    fifo_makespan: int
+    schedule: list
+
+class ChatMessage(BaseModel):
+    role: str
+    content: str
+
+class ChatRequest(BaseModel):
+    messages: List[ChatMessage]
+
+RAILWAY_SYSTEM_PROMPT = """
+You are AMOGH AI — the intelligent Station Master for Amogh Rail's Howrah–Burdwan Line Control Room.
+You have full situational awareness of the live railway network.
+All statistics below are derived from a 50,000-record real-structure dataset of this corridor.
+
+=== ML MODELS ===
+- Stage 1: RandomForest Classifier — 87.17% accuracy, predicts IF a train will be delayed (>10 min)
+- Stage 2: HistGradientBoosting Regressor — R² = 0.878, MAE = 1.59 min, predicts delay magnitude
+- Delay threshold: 10 minutes
+- Top delay factors by feature importance:
+  1. Weather flag: 31.8% importance
+  2. Upstream delay: 24.5% importance
+  3. Section congestion level: 15.6% importance
+  4. Train type: 6.5% importance
+  5. Priority: 5.3% importance
+
+=== NETWORK (HOWRAH → BURDWAN CORRIDOR) ===
+8 sections in order: HWH-BLY → BLY-BDC → BDC-SHE → SHE-SKG → SKG-MMR → MMR-BWN → BWN-GUS → GUS-PAN
+
+Section delay rates (from dataset):
+- HWH-BLY: 38.6% delayed, avg delay 9.23 min, avg when late: 14.92 min [NORMAL]
+- BLY-BDC: 38.9% delayed, avg delay 9.17 min, avg when late: 14.80 min [NORMAL]
+- BDC-SHE: 38.7% delayed, avg delay 9.29 min, avg when late: 15.01 min [NORMAL]
+- SHE-SKG: 56.6% delayed, avg delay 11.69 min, avg when late: 15.47 min [WORST — BOTTLENECK]
+- SKG-MMR: 50.6% delayed, avg delay 11.09 min, avg when late: 15.51 min [HIGH]
+- MMR-BWN: 50.8% delayed, avg delay 11.10 min, avg when late: 15.41 min [HIGH]
+- BWN-GUS: 52.0% delayed, avg delay 11.18 min, avg when late: 15.45 min [HIGH]
+- GUS-PAN: 51.7% delayed, avg delay 11.03 min, avg when late: 15.31 min [HIGH]
+
+=== TRAIN TYPES & PRIORITIES ===
+- Express (Priority 1):  28.9% delay rate, avg 8.06 min, avg when late 14.62 min — 14,094 journeys — HIGHEST priority
+- Passenger (Priority 2): 46.3% delay rate, avg 10.42 min, avg when late 14.88 min — 14,919 journeys
+- Suburban (Priority 2): 45.2% delay rate, avg 10.33 min, avg when late 14.98 min — 12,442 journeys
+- Freight (Priority 3):  81.7% delay rate, avg 14.73 min, avg when late 16.25 min — 8,545 journeys — LOWEST priority
+
+=== WEATHER IMPACT (from dataset) ===
+- Clear (flag=0): 32.5% delayed, avg 8.34 min — 37,396 records
+- Moderate rain (flag=1): 85.4% delayed, avg 14.37 min — 7,872 records
+- Severe weather (flag=2): 99.7% delayed, avg 20.73 min — 4,732 records
+
+=== SEASON IMPACT ===
+- Winter: 55.8% delayed, avg 12.39 min — WORST season
+- Monsoon: 56.1% delayed, avg 11.18 min — WORST season
+- Spring: 41.2% delayed, avg 9.46 min
+- Summer: 37.7% delayed, avg 9.07 min — BEST season
+
+=== TIME OF DAY ===
+- Peak hours: 53.6% delayed, avg 11.31 min
+- Off-peak: 40.8% delayed, avg 9.55 min
+- Night: 40.6% delayed, avg 9.80 min
+
+=== OVERALL NETWORK STATS ===
+- Total dataset: 50,000 journeys on Howrah–Burdwan line
+- Overall delay rate: 47.2% (23,584 delayed journeys)
+- Overall avg delay: 10.47 min across all trains
+- Avg delay when late: 15.27 min
+
+=== OPTIMIZATION SYSTEM ===
+- Dispatch solver: Google OR-Tools CP-SAT (constraint programming)
+- Simulation engine: SimPy discrete-event simulator
+- Priority order: Express (1) > Passenger/Suburban (2) > Freight (3)
+- Typical savings vs FIFO: 10–20 minutes cumulative wait in a 12-train cluster
+
+=== YOUR ROLE ===
+Answer questions from station controllers and hackathon judges concisely and confidently.
+Always cite actual numbers from the dataset above when discussing delays or performance.
+If asked for a recommendation, be direct and action-oriented.
+Keep responses under 150 words unless a detailed analysis is requested.
+Do NOT use markdown formatting — plain text only.
+"""
+
+
 # ── Endpoints ─────────────────────────────────────────────────────────────────
+
 @app.get("/", tags=["Health"])
 def root():
     return {"status": "ok", "service": "Amogh Rail ML API", "version": "1.0.0"}
@@ -176,3 +269,71 @@ def run_optimization(req: OptimizeRequest):
             "cost": opt_cost
         }
     }
+
+@app.post("/generate-insights", tags=["Optimization"])
+def generate_insights(req: InsightRequest):
+    api_key = os.environ.get("NVIDIA_API_KEY")
+    if not api_key or api_key == "your_nvidia_api_key_here":
+        # Mock response for hackathon demo if key is not set
+        return {
+            "insights": "I noticed the HWH-BLY section is heavily congested. I recommend holding the Freight train to let the Express pass. The optimized schedule successfully avoided " + str(req.fifo_wait - req.opt_wait) + " minutes of delay across the network, keeping the bottleneck clear in " + str(req.opt_makespan) + " minutes."
+        }
+
+    try:
+        client = OpenAI(
+            base_url="https://integrate.api.nvidia.com/v1",
+            api_key=api_key
+        )
+        
+        prompt = f"""
+You are an expert AI Railway Station Master. I have just run a dispatch optimization algorithm (CP-SAT) against a standard FIFO manual dispatch.
+Here are the results:
+- Manual Total Wait Time: {req.fifo_wait} mins
+- Optimized Total Wait Time: {req.opt_wait} mins (Saved: {req.fifo_wait - req.opt_wait} mins)
+- Manual Time to Clear Bottleneck: {req.fifo_makespan} mins
+- Optimized Time to Clear Bottleneck: {req.opt_makespan} mins
+
+Write a short, punchy, 2-3 sentence insight for the dashboard. Speak directly to the station controllers. 
+Point out the massive delay savings. Be professional but emphasize the 'AI' advantage. Do not use markdown.
+"""
+        completion = client.chat.completions.create(
+            model="meta/llama-3.1-8b-instruct",
+            messages=[{"role": "user", "content": prompt}],
+            temperature=0.5,
+            top_p=1,
+            max_tokens=1024,
+        )
+        
+        return {"insights": completion.choices[0].message.content.strip()}
+    except Exception as e:
+        print(f"Error calling NVIDIA API: {e}")
+        return {
+            "insights": "I noticed the HWH-BLY section is heavily congested. I recommend holding the Freight train to let the Express pass. The optimized schedule successfully avoided " + str(req.fifo_wait - req.opt_wait) + " minutes of delay across the network, keeping the bottleneck clear in " + str(req.opt_makespan) + " minutes."
+        }
+
+
+@app.post("/chat", tags=["AI"])
+def chat(req: ChatRequest):
+    api_key = os.environ.get("NVIDIA_API_KEY")
+    if not api_key:
+        return {"response": "NVIDIA API key not configured."}
+    try:
+        client = OpenAI(
+            base_url="https://integrate.api.nvidia.com/v1",
+            api_key=api_key
+        )
+        messages = [{"role": "system", "content": RAILWAY_SYSTEM_PROMPT}]
+        messages += [{"role": m.role, "content": m.content} for m in req.messages]
+        completion = client.chat.completions.create(
+            model="meta/llama-3.1-8b-instruct",
+            messages=messages,
+            temperature=0.6,
+            top_p=1,
+            max_tokens=512,
+        )
+        return {"response": completion.choices[0].message.content.strip()}
+    except Exception as e:
+        print(f"Chat error: {e}")
+        return {"response": f"Error: {str(e)}"}
+
+

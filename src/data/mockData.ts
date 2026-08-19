@@ -6,7 +6,7 @@ export const INITIAL_TRAINS: Train[] = TRAIN_DATA as Train[];
 export const CORRIDORS: Corridor[] = [
   {
     id: 'corridor-1',
-    name: 'Northern Corridor',
+    name: 'Northern Corridor (HWH–BWN)',
     load: 82,
     status: 'HIGH',
     activeTrains: 46,
@@ -14,7 +14,7 @@ export const CORRIDORS: Corridor[] = [
   },
   {
     id: 'corridor-2',
-    name: 'Western Corridor',
+    name: 'Eastern Corridor (BWN–PAN)',
     load: 64,
     status: 'NORMAL',
     activeTrains: 38,
@@ -22,7 +22,7 @@ export const CORRIDORS: Corridor[] = [
   },
   {
     id: 'corridor-3',
-    name: 'Eastern Corridor',
+    name: 'Main Line Express Track',
     load: 47,
     status: 'NORMAL',
     activeTrains: 24,
@@ -30,7 +30,7 @@ export const CORRIDORS: Corridor[] = [
   },
   {
     id: 'corridor-4',
-    name: 'Central Freight',
+    name: 'Freight Siding (SHE-SKG)',
     load: 91,
     status: 'CRITICAL',
     activeTrains: 20,

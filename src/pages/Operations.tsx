@@ -42,7 +42,7 @@ export const Operations: React.FC = () => {
             Operations
           </h1>
           <span className="font-mono text-[11px] text-[#5B6478] dark:text-gray-400 uppercase tracking-wider transition-colors">
-            Northern Zone Control Room
+            Howrah–Burdwan Line
           </span>
         </div>
         <div className="flex items-center gap-2">
