@@ -25,6 +25,17 @@ dist-ssr
 *.sln
 *.sw?
 
+# Secrets
+api/.env
+.env
+.env.local
+
+# Python
+__pycache__/
+*.pyc
+.venv/
+venv/
+
 # Raw Datasets & Temporary Scripts
 train_delay_dataset*.csv
 *.csv

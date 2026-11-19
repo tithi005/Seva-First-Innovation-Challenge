@@ -21,11 +21,11 @@ export const Header: React.FC = () => {
   };
 
   return (
-    <header className="h-16 bg-[#FFFFFF] dark:bg-[#0B1120] border-b border-[rgba(15,44,92,0.10)] dark:border-white/10 px-8 flex items-center justify-between sticky top-0 z-10 select-none transition-colors">
+    <header className="h-16 bg-[#FFFFFF] dark:bg-[#0B1120] border-b border-[rgba(15,44,92,0.10)] dark:border-white/10 px-4 md:px-8 flex items-center justify-between sticky top-0 z-10 select-none transition-colors">
       
       {/* Left/Center: Greeting & Context */}
-      <div className="flex items-center gap-6">
-        <h1 className="text-base font-medium text-[#0F2C5C] dark:text-gray-100 transition-colors">
+      <div className="flex min-w-0 items-center gap-3 md:gap-6">
+        <h1 className="truncate text-base font-medium text-[#0F2C5C] dark:text-gray-100 transition-colors">
           {getGreeting()}, {user?.name.split(' ')[0] || 'Arjun'}
         </h1>
         <div className="h-4 w-[1px] bg-[rgba(15,44,92,0.2)] dark:bg-white/20 hidden md:block"></div>
@@ -41,11 +41,11 @@ export const Header: React.FC = () => {
       </div>
 
       {/* Right Controls */}
-      <div className="flex items-center gap-6">
+      <div className="flex items-center gap-3 md:gap-6">
         
         {/* Hexaverse Team Logo Placeholder */}
         {/* Hexaverse Team Logo */}
-        <div className="flex items-center">
+        <div className="hidden md:flex items-center">
           <img src="/team_logo.png" alt="Team Logo" className="h-8 w-auto object-contain drop-shadow-sm" />
         </div>
 

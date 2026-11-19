@@ -1,7 +1,6 @@
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import ReactECharts from 'echarts-for-react';
 import {
-  Brain,
   Zap,
   AlertTriangle,
   CheckCircle2,
@@ -10,6 +9,11 @@ import {
   FlaskConical,
   ChevronRight,
 } from 'lucide-react';
+import { Panel } from '../components/dashboard/Panel';
+import { KpiRail } from '../components/dashboard/KpiRail';
+import type { KpiItem } from '../components/dashboard/KpiRail';
+import { PageHeader } from '../components/dashboard/PageHeader';
+import { FIELD, PAGE, SECTION_LABEL, tag } from '../components/dashboard/theme';
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 interface PredictResult {
@@ -49,13 +53,6 @@ const SEASONS   = ['Summer','Spring','Monsoon','Winter'];
 const TIME_BUCKETS = ['Peak','Off-peak','Night'];
 const WEATHER_LABELS: Record<number, string> = { 0: 'Clear', 1: 'Moderate', 2: 'Severe' };
 const TRAIN_TYPES = ['Express','Passenger','Suburban','Freight'];
-
-// Top 3 feature weights for per-prediction explanation
-const FEATURE_WEIGHTS = [
-  { key: 'weather_flag',             label: 'Weather Condition', weight: 31.80 },
-  { key: 'upstream_delay_min',       label: 'Upstream Delay',    weight: 24.47 },
-  { key: 'section_congestion_level', label: 'Section Congestion',weight: 15.65 },
-];
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 const useDarkMode = () => {
@@ -206,12 +203,12 @@ const getROCOption = (roc: EvalMetrics['roc'], isDark: boolean) => ({
 
 // ── Input components ──────────────────────────────────────────────────────────
 const Label: React.FC<{ children: React.ReactNode }> = ({ children }) => (
-  <label className="text-[11px] font-mono uppercase tracking-wider text-[#5B6478] dark:text-gray-400">
+  <label className="font-mono text-[9px] uppercase tracking-[0.14em] text-[#5B6478] dark:text-gray-400">
     {children}
   </label>
 );
 
-const inputCls = "mt-1 w-full bg-white dark:bg-[#1f2937] border border-[rgba(15,44,92,0.15)] dark:border-white/10 rounded-lg px-3 py-2 text-xs font-mono text-[#0F2C5C] dark:text-gray-200 focus:outline-none focus:border-[#2F5FD1] dark:focus:border-sky-400 transition-colors";
+const inputCls = FIELD;
 
 // ── Main Component ────────────────────────────────────────────────────────────
 export const Predict: React.FC = () => {
@@ -277,43 +274,64 @@ export const Predict: React.FC = () => {
 
   const contributions = featureContribution(form);
 
-  return (
-    <div className="space-y-8 max-w-7xl pb-10">
+  const evalKpis: KpiItem[] = evalMetrics
+    ? [
+        {
+          id: 'acc',
+          label: 'Accuracy',
+          value: `${evalMetrics.metrics.accuracy}`,
+          unit: '%',
+          note: 'RandomForest classifier',
+          tone: 'positive',
+          meter: evalMetrics.metrics.accuracy,
+          threshold: 85,
+        },
+        {
+          id: 'prec',
+          label: 'Precision',
+          value: `${evalMetrics.metrics.precision}`,
+          unit: '%',
+          note: 'Delayed class, hold-out split',
+          tone: 'default',
+          meter: evalMetrics.metrics.precision,
+        },
+        {
+          id: 'recall',
+          label: 'Recall',
+          value: `${evalMetrics.metrics.recall}`,
+          unit: '%',
+          note: 'Delayed trains caught',
+          tone: 'caution',
+          meter: evalMetrics.metrics.recall,
+        },
+        {
+          id: 'f1',
+          label: 'F1 score',
+          value: `${evalMetrics.metrics.f1}`,
+          unit: '%',
+          note: `${evalMetrics.metrics.test_size.toLocaleString()} test rows`,
+          tone: 'default',
+          meter: evalMetrics.metrics.f1,
+          threshold: 85,
+        },
+      ]
+    : [];
 
-      {/* ── Page Header ─────────────────────────────────────────────────── */}
-      <div className="flex flex-col sm:flex-row sm:items-baseline sm:justify-between gap-2 border-b border-[rgba(15,44,92,0.08)] dark:border-white/10 pb-4">
-        <div className="flex items-baseline gap-3">
-          <h1 className="text-xl font-semibold text-[#0F2C5C] dark:text-white tracking-tight transition-colors flex items-center gap-2">
-            <FlaskConical className="w-5 h-5 text-[#2F5FD1] dark:text-sky-400" />
-            ML Inference
-          </h1>
-          <span className="font-mono text-[11px] text-[#5B6478] dark:text-gray-400 uppercase tracking-wider">
-            Live model prediction
-          </span>
-        </div>
-        <div className="flex items-center gap-2">
-          <span className="font-mono text-[10px] text-[#2F5FD1] dark:text-sky-400 bg-[#2F5FD1]/10 border border-[#2F5FD1]/20 px-2 py-1 rounded">
-            RandomForest · 87.17% acc
-          </span>
-          <span className="font-mono text-[10px] text-[#8B5CF6] dark:text-violet-400 bg-violet-50 dark:bg-violet-950/30 border border-violet-200 dark:border-violet-800/40 px-2 py-1 rounded">
-            HistGradientBoosting · MAE 1.59 min
-          </span>
-        </div>
-      </div>
+  return (
+    <div className={PAGE}>
+
+      {/* ── Console header ──────────────────────────────────────────────── */}
+      <PageHeader eyebrow="Model lab · two-stage inference" title="ML Inference" live>
+        <span className={tag('info')}>RandomForest · 87.17% acc</span>
+        <span className={tag('muted')}>HistGradientBoosting · MAE 1.59 min</span>
+      </PageHeader>
 
       {/* ── Two-Column: Form + Result ────────────────────────────────────── */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+      <div className="grid grid-cols-1 items-start lg:grid-cols-2 gap-5">
 
         {/* ── Left: Input Form ──────────────────────────────────────────── */}
-        <form onSubmit={handleSubmit} className="bg-white dark:bg-[#111827] border border-[rgba(15,44,92,0.10)] dark:border-white/10 rounded-xl shadow-sm overflow-hidden">
-          <div className="px-5 py-3.5 border-b border-[rgba(15,44,92,0.08)] dark:border-white/10 bg-[#F8F9FB] dark:bg-[#1f2937] flex items-center gap-2">
-            <Brain className="w-3.5 h-3.5 text-[#0F2C5C] dark:text-sky-400" />
-            <h3 className="text-xs font-bold text-[#0F2C5C] dark:text-white uppercase tracking-wider">
-              Input Parameters — 11 Features
-            </h3>
-          </div>
-
-          <div className="p-5 space-y-4">
+        <Panel title="Input parameters" meta="11 features" bodyClassName="p-5">
+          <form onSubmit={handleSubmit} className="space-y-4">
             {/* Row 1 */}
             <div className="grid grid-cols-2 gap-4">
               <div>
@@ -459,10 +477,10 @@ export const Predict: React.FC = () => {
             </div>
 
             {/* Derived field */}
-            <div className="flex items-center gap-2 text-[11px] text-[#5B6478] dark:text-gray-400 bg-slate-50 dark:bg-slate-800/50 px-3 py-2 rounded-lg border border-[rgba(15,44,92,0.06)] dark:border-white/5">
-              <span className="font-mono">is_weekend</span>
+            <div className="flex items-center gap-2 border border-[rgba(15,44,92,0.10)] dark:border-white/10 bg-[#F6F8FB] dark:bg-white/[0.03] px-3 py-2 font-mono text-[10px] text-[#5B6478] dark:text-gray-400">
+              <span>is_weekend</span>
               <ChevronRight className="w-3 h-3" />
-              <span className="font-mono font-bold text-[#0F2C5C] dark:text-white">
+              <span className="font-semibold text-[#0F2C5C] dark:text-white">
                 {isWeekend} (auto-derived from day)
               </span>
             </div>
@@ -471,130 +489,171 @@ export const Predict: React.FC = () => {
             <button
               type="submit"
               disabled={loading}
-              className="w-full py-3 bg-[#0F2C5C] hover:bg-[#1a3d7c] active:bg-[#0a1e3f] dark:bg-[#2F5FD1] dark:hover:bg-[#2351b8] text-white font-mono text-xs font-bold uppercase tracking-widest rounded-lg flex items-center justify-center gap-2.5 transition-all shadow-md disabled:opacity-60"
+              className="w-full py-3 bg-[#0F2C5C] hover:bg-[#2F5FD1] active:bg-[#0a1e3f] dark:bg-sky-500 dark:hover:bg-sky-400 text-white dark:text-slate-950 font-mono text-[10px] font-bold uppercase tracking-[0.18em] flex items-center justify-center gap-2.5 transition-colors disabled:opacity-60"
             >
               {loading
                 ? <><Loader2 className="w-4 h-4 animate-spin" /> Running Inference…</>
                 : <><Zap className="w-4 h-4" /> Run Inference</>
               }
             </button>
-          </div>
-        </form>
+          </form>
+        </Panel>
 
-        {/* ── Right: Result Panel ──────────────────────────────────────── */}
-        <div className="space-y-4">
+        {/* ── Right: Result ─────────────────────────────────────────────── */}
+        <div className="space-y-5">
 
           {/* API Error */}
           {apiError && (
-            <div className="bg-white dark:bg-[#111827] border border-[#C23636]/30 rounded-xl p-5 flex items-start gap-3">
-              <WifiOff className="w-5 h-5 text-[#C23636] dark:text-red-400 shrink-0 mt-0.5" />
-              <div>
-                <div className="text-sm font-bold text-[#C23636] dark:text-red-400 mb-1">API Not Reachable</div>
-                <p className="text-xs text-[#5B6478] dark:text-gray-400 leading-relaxed">{apiError}</p>
-                <div className="mt-3 font-mono text-[10px] bg-slate-100 dark:bg-slate-800 text-[#0F2C5C] dark:text-gray-200 px-3 py-2 rounded-lg">
-                  uvicorn api.main:app --reload --port 8000
+            <Panel
+              title="Inference unavailable"
+              meta="HTTP"
+              action={<span className={tag('danger')}>Offline</span>}
+            >
+              <div className="p-4 flex items-start gap-3">
+                <WifiOff className="w-4 h-4 text-[#C23636] dark:text-red-400 shrink-0 mt-0.5" />
+                <div className="min-w-0">
+                  <p className="text-[11px] leading-relaxed text-[#5B6478] dark:text-gray-400">{apiError}</p>
+                  <div className="mt-3 border border-[rgba(15,44,92,0.10)] dark:border-white/10 bg-[#F6F8FB] dark:bg-white/5 px-2.5 py-2 font-mono text-[10px] text-[#0F2C5C] dark:text-gray-200">
+                    uvicorn api.main:app --reload --port 8000
+                  </div>
                 </div>
               </div>
-            </div>
+            </Panel>
           )}
 
           {/* Empty state */}
           {!result && !apiError && !loading && (
-            <div className="bg-white dark:bg-[#111827] border border-[rgba(15,44,92,0.10)] dark:border-white/10 rounded-xl p-8 flex flex-col items-center justify-center text-center gap-3 min-h-[200px]">
-              <FlaskConical className="w-8 h-8 text-[#5B6478] dark:text-gray-500" />
-              <div className="text-sm font-semibold text-[#5B6478] dark:text-gray-400">
-                Set parameters and click Run Inference
+            <Panel title="Inference result" meta="awaiting input">
+              <div className="min-h-[220px] p-8 flex flex-col items-center justify-center gap-3 text-center">
+                <FlaskConical className="w-7 h-7 text-[#8C95A6] dark:text-gray-600" />
+                <div className="font-mono text-[10px] uppercase tracking-[0.16em] text-[#5B6478] dark:text-gray-400">
+                  Set parameters and run inference
+                </div>
+                <p className="max-w-xs text-[11px] leading-relaxed text-[#5B6478] dark:text-gray-500">
+                  The classifier decides whether the train crosses the 10 minute threshold; the
+                  regressor estimates by how much.
+                </p>
               </div>
-              <div className="text-xs text-[#5B6478] dark:text-gray-500 max-w-xs">
-                The RandomForest classifier predicts delay status; the regressor estimates the delay magnitude.
+            </Panel>
+          )}
+
+          {/* Loading */}
+          {loading && !result && !apiError && (
+            <Panel title="Running inference" meta="RF to HGB">
+              <div className="min-h-[220px] p-8 flex flex-col items-center justify-center gap-3">
+                <Loader2 className="w-5 h-5 animate-spin text-[#2F5FD1] dark:text-sky-400" />
+                <span className="font-mono text-[10px] uppercase tracking-[0.16em] text-[#5B6478] dark:text-gray-400">
+                  scoring 11 features...
+                </span>
               </div>
-            </div>
+            </Panel>
           )}
 
           {/* Result */}
           {result && (
             <>
-              {/* Main prediction banner */}
-              <div className={`rounded-xl border p-5 ${
-                result.is_delayed
-                  ? 'bg-red-50 dark:bg-red-950/20 border-[#C23636]/30'
-                  : 'bg-emerald-50 dark:bg-emerald-950/20 border-[#1E7F4F]/30'
-              }`}>
-                <div className="flex items-center gap-3 mb-4">
+              <Panel
+                title="Inference result"
+                meta={result.model_used.split(' + ')[0]}
+                action={
+                  <span className={tag(result.is_delayed ? 'danger' : 'positive')}>
+                    {result.is_delayed ? 'Delayed' : 'On time'}
+                  </span>
+                }
+              >
+                <div className="px-4 py-4 flex items-center gap-3">
                   {result.is_delayed
-                    ? <AlertTriangle className="w-6 h-6 text-[#C23636] dark:text-red-400 shrink-0" />
-                    : <CheckCircle2 className="w-6 h-6 text-[#1E7F4F] dark:text-emerald-400 shrink-0" />
+                    ? <AlertTriangle className="w-5 h-5 shrink-0 text-[#C23636] dark:text-red-400" />
+                    : <CheckCircle2 className="w-5 h-5 shrink-0 text-[#1E7F4F] dark:text-emerald-400" />
                   }
                   <div>
-                    <div className={`text-xl font-bold font-mono ${
-                      result.is_delayed ? 'text-[#C23636] dark:text-red-400' : 'text-[#1E7F4F] dark:text-emerald-400'
-                    }`}>
-                      {result.is_delayed ? '⚠ DELAYED' : '✓ ON TIME'}
+                    <div
+                      className={`font-mono text-[26px] leading-none font-semibold tabular-nums ${
+                        result.is_delayed
+                          ? 'text-[#C23636] dark:text-red-400'
+                          : 'text-[#1E7F4F] dark:text-emerald-400'
+                      }`}
+                    >
+                      {result.is_delayed ? `+${result.predicted_delay_min}` : result.predicted_delay_min}
+                      <span className="ml-1 font-mono text-[10px] lowercase tracking-normal text-[#5B6478] dark:text-gray-400">
+                        min
+                      </span>
                     </div>
-                    <div className="text-[11px] text-[#5B6478] dark:text-gray-400">
-                      RandomForest Classifier · P(delayed) = {result.delay_probability}%
+                    <div className="mt-1.5 font-mono text-[9px] uppercase tracking-[0.16em] text-[#5B6478] dark:text-gray-400">
+                      predicted delay · P(delayed) {result.delay_probability}%
                     </div>
                   </div>
                 </div>
 
-                <div className="grid grid-cols-3 gap-3">
-                  <div className="bg-white/60 dark:bg-black/20 rounded-lg p-3 text-center">
-                    <div className="font-mono text-lg font-bold text-[#0F2C5C] dark:text-white">
+                <div className="grid grid-cols-3 border-t border-[rgba(15,44,92,0.10)] dark:border-white/10 divide-x divide-[rgba(15,44,92,0.10)] dark:divide-white/10">
+                  <div className="px-3 py-2.5 min-w-0">
+                    <div className="font-mono text-[9px] uppercase tracking-[0.14em] text-[#5B6478] dark:text-gray-400">
+                      Confidence
+                    </div>
+                    <div className="mt-1 font-mono text-[15px] font-semibold tabular-nums text-[#0F2C5C] dark:text-white">
                       {result.confidence}%
                     </div>
-                    <div className="text-[10px] text-[#5B6478] dark:text-gray-400 uppercase font-mono">Confidence</div>
                   </div>
-                  <div className="bg-white/60 dark:bg-black/20 rounded-lg p-3 text-center">
-                    <div className={`font-mono text-lg font-bold ${
-                      result.is_delayed ? 'text-[#C23636] dark:text-red-400' : 'text-[#1E7F4F] dark:text-emerald-400'
-                    }`}>
-                      {result.is_delayed ? `+${result.predicted_delay_min}` : result.predicted_delay_min} min
+                  <div className="px-3 py-2.5 min-w-0">
+                    <div className="font-mono text-[9px] uppercase tracking-[0.14em] text-[#5B6478] dark:text-gray-400">
+                      Pred. delay
                     </div>
-                    <div className="text-[10px] text-[#5B6478] dark:text-gray-400 uppercase font-mono">Pred. Delay</div>
+                    <div
+                      className={`mt-1 font-mono text-[15px] font-semibold tabular-nums ${
+                        result.is_delayed
+                          ? 'text-[#C23636] dark:text-red-400'
+                          : 'text-[#1E7F4F] dark:text-emerald-400'
+                      }`}
+                    >
+                      {result.predicted_delay_min} min
+                    </div>
                   </div>
-                  <div className="bg-white/60 dark:bg-black/20 rounded-lg p-3 text-center">
-                    <div className="font-mono text-lg font-bold text-[#0F2C5C] dark:text-white">
+                  <div className="px-3 py-2.5 min-w-0">
+                    <div className="font-mono text-[9px] uppercase tracking-[0.14em] text-[#5B6478] dark:text-gray-400">
+                      Threshold
+                    </div>
+                    <div className="mt-1 font-mono text-[15px] font-semibold tabular-nums text-[#0F2C5C] dark:text-white">
                       {result.threshold_min} min
                     </div>
-                    <div className="text-[10px] text-[#5B6478] dark:text-gray-400 uppercase font-mono">Threshold</div>
                   </div>
                 </div>
-              </div>
+              </Panel>
 
-              {/* Top contributing features */}
-              <div className="bg-white dark:bg-[#111827] border border-[rgba(15,44,92,0.10)] dark:border-white/10 rounded-xl p-4">
-                <div className="text-[11px] font-mono uppercase tracking-wider text-[#5B6478] dark:text-gray-400 mb-3">
-                  Top Factors for This Prediction
-                </div>
-                <div className="space-y-3">
+              <Panel title="Top contributing factors" meta="value x RF importance">
+                <div className="p-4 space-y-3">
                   {contributions.map((c, i) => (
                     <div key={c.label} className="flex items-center gap-3">
-                      <span className="text-[10px] font-mono text-[#5B6478] dark:text-gray-500 w-4 text-center">{i + 1}</span>
-                      <div className="flex-1">
-                        <div className="flex justify-between items-center mb-1">
-                          <span className="text-xs font-medium text-[#0F2C5C] dark:text-gray-200">{c.label}</span>
-                          <span className="font-mono text-[10px] text-[#5B6478] dark:text-gray-400">{c.value}</span>
+                      <span className="w-4 shrink-0 text-center font-mono text-[9px] tabular-nums text-[#8C95A6] dark:text-gray-500">
+                        {i + 1}
+                      </span>
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-baseline justify-between gap-2">
+                          <span className="truncate text-[11px] font-medium text-[#0F2C5C] dark:text-gray-200">
+                            {c.label}
+                          </span>
+                          <span className="font-mono text-[9px] tabular-nums text-[#5B6478] dark:text-gray-400">
+                            {c.value}
+                          </span>
                         </div>
-                        <div className="h-1.5 bg-slate-100 dark:bg-slate-800 rounded-full overflow-hidden">
+                        <div className="mt-1.5 h-[3px] w-full bg-[rgba(15,44,92,0.08)] dark:bg-white/10">
                           <div
-                            className="h-full rounded-full bg-[#2F5FD1] transition-all duration-700"
+                            className="h-full bg-[#2F5FD1] dark:bg-sky-400 transition-all duration-700"
                             style={{ width: `${Math.min((c.contrib / 35) * 100, 100)}%` }}
                           />
                         </div>
                       </div>
-                      <span className="font-mono text-[10px] text-[#5B6478] dark:text-gray-400 w-10 text-right">
+                      <span className="w-10 shrink-0 text-right font-mono text-[9px] tabular-nums text-[#5B6478] dark:text-gray-400">
                         {c.contrib.toFixed(1)}%
                       </span>
                     </div>
                   ))}
                 </div>
-                <div className="mt-3 pt-3 border-t border-[rgba(15,44,92,0.06)] dark:border-white/5 text-[10px] text-[#5B6478] dark:text-gray-500 font-mono">
-                  Contribution = feature_value × RF_importance_weight
+                <div className="border-t border-[rgba(15,44,92,0.10)] dark:border-white/10 px-4 py-2.5 font-mono text-[9px] uppercase tracking-[0.14em] text-[#5B6478] dark:text-gray-500">
+                  contribution = feature value x importance weight
                 </div>
-              </div>
+              </Panel>
 
-              {/* Model labels */}
-              <div className="text-[10px] text-[#5B6478] dark:text-gray-500 font-mono px-1">
+              <div className="px-1 font-mono text-[9px] uppercase tracking-[0.14em] text-[#8C95A6] dark:text-gray-600">
                 {result.model_used}
               </div>
             </>
@@ -603,43 +662,27 @@ export const Predict: React.FC = () => {
       </div>
 
       {/* ── Model Evaluation ─────────────────────────────────────────────── */}
-      <div className="space-y-4">
-        <div className="text-[11px] font-semibold uppercase tracking-wider text-[#5B6478] dark:text-gray-400 transition-colors">
-          Model Evaluation — 10,000 Test Samples (20% Hold-out Split)
+      <div className="space-y-3">
+        <div className={SECTION_LABEL}>
+          <span className="w-[3px] h-3 bg-[#2F5FD1] dark:bg-sky-400" aria-hidden="true" />
+          Model evaluation · 10,000 hold-out samples
         </div>
 
         {!evalMetrics ? (
-          <div className="bg-white dark:bg-[#111827] border border-[rgba(15,44,92,0.10)] dark:border-white/10 rounded-xl p-8 text-center text-xs text-[#5B6478] dark:text-gray-400 font-mono">
-            Evaluation metrics load from API. Start the server to view them.
-          </div>
+          <Panel title="Evaluation metrics" meta="api required">
+            <div className="p-8 text-center font-mono text-[10px] uppercase tracking-[0.16em] text-[#5B6478] dark:text-gray-400">
+              Start the API to load the confusion matrix and ROC curve
+            </div>
+          </Panel>
         ) : (
           <>
-            {/* Metric summary pills */}
-            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-              {[
-                { label: 'Accuracy',  value: `${evalMetrics.metrics.accuracy}%`,  color: '#1E7F4F' },
-                { label: 'Precision', value: `${evalMetrics.metrics.precision}%`, color: '#2F5FD1' },
-                { label: 'Recall',    value: `${evalMetrics.metrics.recall}%`,    color: '#8B5CF6' },
-                { label: 'F1 Score',  value: `${evalMetrics.metrics.f1}%`,        color: '#F5821F' },
-              ].map(m => (
-                <div key={m.label} className="bg-white dark:bg-[#111827] border border-[rgba(15,44,92,0.10)] dark:border-white/10 rounded-xl p-3 text-center shadow-sm">
-                  <div className="font-mono text-base font-bold" style={{ color: m.color }}>{m.value}</div>
-                  <div className="text-[10px] font-mono uppercase text-[#5B6478] dark:text-gray-400 mt-0.5">{m.label}</div>
-                </div>
-              ))}
-            </div>
+            <KpiRail columns={4} items={evalKpis} />
 
-            {/* Charts row */}
             <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
-
-              {/* Confusion Matrix */}
-              <div className="bg-white dark:bg-[#111827] border border-[rgba(15,44,92,0.10)] dark:border-white/10 rounded-xl overflow-hidden shadow-sm">
-                <div className="px-5 py-3 border-b border-[rgba(15,44,92,0.08)] dark:border-white/10 bg-[#F8F9FB] dark:bg-[#1f2937]">
-                  <h3 className="text-xs font-bold text-[#0F2C5C] dark:text-white uppercase tracking-wider">Confusion Matrix</h3>
-                  <div className="text-[10px] text-[#5B6478] dark:text-gray-400 font-mono mt-0.5">
-                    TN={evalMetrics.confusion_matrix.tn.toLocaleString()} · FP={evalMetrics.confusion_matrix.fp.toLocaleString()} · FN={evalMetrics.confusion_matrix.fn.toLocaleString()} · TP={evalMetrics.confusion_matrix.tp.toLocaleString()}
-                  </div>
-                </div>
+              <Panel
+                title="Confusion matrix"
+                meta={`TN ${evalMetrics.confusion_matrix.tn.toLocaleString()} · FP ${evalMetrics.confusion_matrix.fp.toLocaleString()} · FN ${evalMetrics.confusion_matrix.fn.toLocaleString()} · TP ${evalMetrics.confusion_matrix.tp.toLocaleString()}`}
+              >
                 <div className="p-4">
                   <ReactECharts
                     option={getCMOption(evalMetrics.confusion_matrix, isDark)}
@@ -647,16 +690,12 @@ export const Predict: React.FC = () => {
                     opts={{ renderer: 'canvas' }}
                   />
                 </div>
-              </div>
+              </Panel>
 
-              {/* ROC Curve */}
-              <div className="bg-white dark:bg-[#111827] border border-[rgba(15,44,92,0.10)] dark:border-white/10 rounded-xl overflow-hidden shadow-sm">
-                <div className="px-5 py-3 border-b border-[rgba(15,44,92,0.08)] dark:border-white/10 bg-[#F8F9FB] dark:bg-[#1f2937]">
-                  <h3 className="text-xs font-bold text-[#0F2C5C] dark:text-white uppercase tracking-wider">ROC Curve</h3>
-                  <div className="text-[10px] text-[#5B6478] dark:text-gray-400 font-mono mt-0.5">
-                    AUC = {evalMetrics.roc.auc} · {evalMetrics.metrics.test_size.toLocaleString()} test samples
-                  </div>
-                </div>
+              <Panel
+                title="ROC curve"
+                meta={`AUC ${evalMetrics.roc.auc} · ${evalMetrics.metrics.test_size.toLocaleString()} samples`}
+              >
                 <div className="p-4">
                   <ReactECharts
                     option={getROCOption(evalMetrics.roc, isDark)}
@@ -664,7 +703,7 @@ export const Predict: React.FC = () => {
                     opts={{ renderer: 'canvas' }}
                   />
                 </div>
-              </div>
+              </Panel>
             </div>
           </>
         )}

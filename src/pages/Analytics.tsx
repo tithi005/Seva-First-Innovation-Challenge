@@ -1,13 +1,15 @@
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import ReactECharts from 'echarts-for-react';
 import { useSystem } from '../context/SystemContext';
-import { StatCard } from '../components/common/StatCard';
 import { StatusBadge } from '../components/common/StatusBadge';
+import { Panel } from '../components/dashboard/Panel';
+import { KpiRail } from '../components/dashboard/KpiRail';
+import type { KpiItem } from '../components/dashboard/KpiRail';
+import { PageHeader } from '../components/dashboard/PageHeader';
+import { PAGE, SECTION_LABEL, THEAD, TROW, tag } from '../components/dashboard/theme';
 import {
-  WEEKLY_PERFORMANCE,
   DELAY_BY_TRAIN_TYPE,
   SECTION_DELAY_STATS,
-  WEATHER_IMPACT,
   DELAY_BY_SEASON,
   DELAY_BY_TIME_BUCKET,
   ML_PREDICTIONS,
@@ -19,19 +21,7 @@ import {
   getWeeklyLineOption,
   getSeasonChartOption,
 } from '../data/analyticsData';
-import {
-  Brain,
-  Zap,
-  AlertTriangle,
-  CheckCircle2,
-  TrendingDown,
-  CloudRain,
-  Clock,
-  BarChart3,
-  Target,
-  Activity,
-  ChevronRight,
-} from 'lucide-react';
+import { Zap } from 'lucide-react';
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 const useDarkMode = () => {
@@ -48,17 +38,11 @@ const useDarkMode = () => {
   return isDark;
 };
 
-const SectionLabel: React.FC<{ label: string }> = ({ label }) => (
-  <div className="text-[11px] font-semibold uppercase tracking-wider text-[#5B6478] dark:text-gray-400 transition-colors mb-4">
-    {label}
-  </div>
-);
-
-// ── Weather badge ─────────────────────────────────────────────────────────────
-const weatherColors: Record<string, string> = {
-  Clear:    'text-emerald-600 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-950/40',
-  Moderate: 'text-amber-600  dark:text-amber-400   bg-amber-50   dark:bg-amber-950/40',
-  Severe:   'text-red-600    dark:text-red-400     bg-red-50     dark:bg-red-950/40',
+// ── Weather tones for the prediction feed ─────────────────────────────────────
+const weatherTone: Record<string, 'positive' | 'caution' | 'danger'> = {
+  Clear: 'positive',
+  Moderate: 'caution',
+  Severe: 'danger',
 };
 
 // ── Main Component ────────────────────────────────────────────────────────────
@@ -77,80 +61,73 @@ export const Analytics: React.FC = () => {
     season:      getSeasonChartOption(isDark),
   };
 
+  const kpis: KpiItem[] = [
+    {
+      id: 'acc',
+      label: 'Classifier accuracy',
+      value: `${DATASET_OVERVIEW.classifierAccuracy}`,
+      unit: '%',
+      note: `RandomForest · ${DATASET_OVERVIEW.delayThreshold} min threshold`,
+      tone: 'positive',
+      meter: DATASET_OVERVIEW.classifierAccuracy,
+      threshold: 85,
+    },
+    {
+      id: 'mae',
+      label: 'Regressor MAE',
+      value: `${DATASET_OVERVIEW.regressorMAE}`,
+      unit: 'min',
+      note: `R² ${DATASET_OVERVIEW.regressorR2} · HistGradientBoosting`,
+      tone: 'positive',
+      meter: (1 - DATASET_OVERVIEW.regressorMAE / 10) * 100,
+    },
+    {
+      id: 'delayed',
+      label: 'Fleet delayed rate',
+      value: `${DATASET_OVERVIEW.delayedPct}`,
+      unit: '%',
+      note: `${DATASET_OVERVIEW.delayedCount.toLocaleString()} of 50k journeys`,
+      tone: 'danger',
+      meter: DATASET_OVERVIEW.delayedPct,
+      threshold: 50,
+    },
+    {
+      id: 'ontime',
+      label: 'On-time performance',
+      value: `${DATASET_OVERVIEW.onTimePct}`,
+      unit: '%',
+      note: `Target ≥ 85% · ${DATASET_OVERVIEW.onTimeCount.toLocaleString()} cleared`,
+      tone: 'caution',
+      meter: DATASET_OVERVIEW.onTimePct,
+      threshold: 85,
+    },
+  ];
+
+  const timeKpis: KpiItem[] = DELAY_BY_TIME_BUCKET.map((t) => ({
+    id: t.bucket,
+    label: t.bucket,
+    value: `${t.avgDelay}`,
+    unit: 'min',
+    note: `${t.delayedPct}% delayed · avg when late`,
+    tone: t.avgDelay > 10 ? 'caution' : 'positive',
+    meter: t.delayedPct,
+    threshold: 50,
+  }));
+
   return (
-    <div className="space-y-10 max-w-7xl pb-10">
+    <div className={PAGE}>
 
-      {/* ── Page Header ───────────────────────────────────────────────────── */}
-      <div className="flex flex-col sm:flex-row sm:items-baseline sm:justify-between gap-2 border-b border-[rgba(15,44,92,0.08)] dark:border-white/10 pb-4">
-        <div className="flex items-baseline gap-3">
-          <h1 className="text-xl font-semibold text-[#0F2C5C] dark:text-white tracking-tight transition-colors">
-            Analytics
-          </h1>
-          <span className="font-mono text-[11px] text-[#5B6478] dark:text-gray-400 uppercase tracking-wider transition-colors">
-            Northern Zone · ML-Powered Delay Intelligence
-          </span>
-        </div>
-        <div className="flex items-center gap-2">
-          <span className="font-mono text-[10px] text-[#1E7F4F] dark:text-emerald-400 bg-[#1E7F4F]/10 border border-[#1E7F4F]/20 px-2 py-1 rounded font-bold tracking-wider">
-            50,000 RECORDS ANALYSED
-          </span>
-          <span className="font-mono text-[10px] text-[#2F5FD1] dark:text-sky-400 bg-[#2F5FD1]/10 border border-[#2F5FD1]/20 px-2 py-1 rounded font-bold tracking-wider">
-            RF + HGB MODELS
-          </span>
-        </div>
-      </div>
+      {/* ── Console header ───────────────────────────────────────────────── */}
+      <PageHeader eyebrow="Intelligence · 50k journey corpus" title="Analytics" live>
+        <span className={tag('positive')}>50,000 records analysed</span>
+        <span className={tag('info')}>RF + HGB models</span>
+      </PageHeader>
 
-      {/* ── Model Performance KPI Row ──────────────────────────────────────── */}
-      <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
-        <div className="bg-white dark:bg-[#111827] border border-[rgba(15,44,92,0.10)] dark:border-white/10 rounded-xl p-4 shadow-sm hover:border-[#1E7F4F]/40 transition-all">
-          <StatCard
-            label="Classifier Accuracy"
-            value={`${DATASET_OVERVIEW.classifierAccuracy}%`}
-            delta="RandomForest · Binary"
-            deltaType="positive"
-            subLabel={`Delay threshold: >${DATASET_OVERVIEW.delayThreshold} min`}
-          />
-        </div>
-        <div className="bg-white dark:bg-[#111827] border border-[rgba(15,44,92,0.10)] dark:border-white/10 rounded-xl p-4 shadow-sm hover:border-[#2F5FD1]/40 transition-all">
-          <StatCard
-            label="Regressor MAE"
-            value={`${DATASET_OVERVIEW.regressorMAE} min`}
-            delta={`R² = ${DATASET_OVERVIEW.regressorR2}`}
-            deltaType="positive"
-            subLabel="HistGradientBoosting regressor"
-          />
-        </div>
-        <div className="bg-white dark:bg-[#111827] border border-[rgba(15,44,92,0.10)] dark:border-white/10 rounded-xl p-4 shadow-sm hover:border-[#C23636]/40 transition-all">
-          <StatCard
-            label="Fleet Delayed Rate"
-            value={`${DATASET_OVERVIEW.delayedPct}%`}
-            delta={`Avg: ${DATASET_OVERVIEW.avgDelayAll} min`}
-            deltaType="negative"
-            subLabel={`${DATASET_OVERVIEW.delayedCount.toLocaleString()} delayed of 50K`}
-          />
-        </div>
-        <div className="bg-white dark:bg-[#111827] border border-[rgba(15,44,92,0.10)] dark:border-white/10 rounded-xl p-4 shadow-sm hover:border-[#F5821F]/40 transition-all">
-          <StatCard
-            label="On-Time Performance"
-            value={`${DATASET_OVERVIEW.onTimePct}%`}
-            delta={`+0.4% vs last week`}
-            deltaType="positive"
-            subLabel={`${DATASET_OVERVIEW.onTimeCount.toLocaleString()} on-time trains`}
-          />
-        </div>
-      </div>
+      <KpiRail columns={4} items={kpis} />
 
-      {/* ── Row 1: Pie + Weekly Line ───────────────────────────────────────── */}
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-
-        {/* On-Time vs Delayed Donut */}
-        <div className="bg-white dark:bg-[#111827] border border-[rgba(15,44,92,0.10)] dark:border-white/10 rounded-xl overflow-hidden shadow-sm">
-          <div className="px-5 py-3.5 border-b border-[rgba(15,44,92,0.08)] dark:border-white/10 bg-[#F8F9FB] dark:bg-[#1f2937] flex items-center gap-2">
-            <Target className="w-3.5 h-3.5 text-[#0F2C5C] dark:text-sky-400" />
-            <h3 className="text-xs font-bold text-[#0F2C5C] dark:text-white uppercase tracking-wider">
-              On-Time vs Delayed Split
-            </h3>
-          </div>
+      {/* ── Row 1: Pie + Weekly Line ─────────────────────────────────────── */}
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+        <Panel title="On-time vs delayed split" meta="50k journeys">
           <div className="p-4">
             <ReactECharts
               option={chartOpts.onTimePie}
@@ -159,16 +136,9 @@ export const Analytics: React.FC = () => {
               opts={{ renderer: 'canvas' }}
             />
           </div>
-        </div>
+        </Panel>
 
-        {/* Weekly On-Time Line */}
-        <div className="bg-white dark:bg-[#111827] border border-[rgba(15,44,92,0.10)] dark:border-white/10 rounded-xl overflow-hidden shadow-sm">
-          <div className="px-5 py-3.5 border-b border-[rgba(15,44,92,0.08)] dark:border-white/10 bg-[#F8F9FB] dark:bg-[#1f2937] flex items-center gap-2">
-            <Activity className="w-3.5 h-3.5 text-[#0F2C5C] dark:text-sky-400" />
-            <h3 className="text-xs font-bold text-[#0F2C5C] dark:text-white uppercase tracking-wider">
-              Weekly On-Time Performance
-            </h3>
-          </div>
+        <Panel title="Weekly on-time performance" meta="rolling 7 day window">
           <div className="p-4">
             <ReactECharts
               option={chartOpts.weekly}
@@ -176,54 +146,33 @@ export const Analytics: React.FC = () => {
               opts={{ renderer: 'canvas' }}
             />
           </div>
-        </div>
+        </Panel>
       </div>
 
-      {/* ── Row 2: Train Type Bar + Section Radar ─────────────────────────── */}
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-
-        {/* Delay % by Train Type */}
-        <div className="bg-white dark:bg-[#111827] border border-[rgba(15,44,92,0.10)] dark:border-white/10 rounded-xl overflow-hidden shadow-sm">
-          <div className="px-5 py-3.5 border-b border-[rgba(15,44,92,0.08)] dark:border-white/10 bg-[#F8F9FB] dark:bg-[#1f2937] flex items-center justify-between">
-            <div className="flex items-center gap-2">
-              <BarChart3 className="w-3.5 h-3.5 text-[#0F2C5C] dark:text-sky-400" />
-              <h3 className="text-xs font-bold text-[#0F2C5C] dark:text-white uppercase tracking-wider">
-                Delay % by Train Type
-              </h3>
-            </div>
-            <span className="font-mono text-[10px] text-[#5B6478] dark:text-gray-400">
-              Threshold: &gt;10 min
-            </span>
-          </div>
+      {/* ── Row 2: Train Type Bar + Section Radar ────────────────────────── */}
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+        <Panel title="Delay by train type" meta="threshold > 10 min">
           <div className="p-4">
             <ReactECharts
               option={chartOpts.trainType}
               style={{ height: 200 }}
               opts={{ renderer: 'canvas' }}
             />
-            {/* Inline legend */}
             <div className="mt-3 grid grid-cols-2 gap-x-4 gap-y-1.5">
-              {DELAY_BY_TRAIN_TYPE.map(t => (
+              {DELAY_BY_TRAIN_TYPE.map((t) => (
                 <div key={t.type} className="flex items-center justify-between text-[10px]">
                   <div className="flex items-center gap-1.5">
-                    <span className="w-2.5 h-2.5 rounded-sm inline-block" style={{ background: t.color }} />
-                    <span className="text-[#0F2C5C] dark:text-gray-200 font-medium">{t.type}</span>
+                    <span className="w-2 h-2 inline-block" style={{ background: t.color }} />
+                    <span className="font-mono text-[#0F2C5C] dark:text-gray-200">{t.type}</span>
                   </div>
-                  <span className="font-mono text-[#5B6478] dark:text-gray-400">{t.delayedPct}%</span>
+                  <span className="font-mono tabular-nums text-[#5B6478] dark:text-gray-400">{t.delayedPct}%</span>
                 </div>
               ))}
             </div>
           </div>
-        </div>
+        </Panel>
 
-        {/* Section Health Radar */}
-        <div className="bg-white dark:bg-[#111827] border border-[rgba(15,44,92,0.10)] dark:border-white/10 rounded-xl overflow-hidden shadow-sm">
-          <div className="px-5 py-3.5 border-b border-[rgba(15,44,92,0.08)] dark:border-white/10 bg-[#F8F9FB] dark:bg-[#1f2937] flex items-center gap-2">
-            <Brain className="w-3.5 h-3.5 text-[#0F2C5C] dark:text-sky-400" />
-            <h3 className="text-xs font-bold text-[#0F2C5C] dark:text-white uppercase tracking-wider">
-              Section On-Time Health (Radar)
-            </h3>
-          </div>
+        <Panel title="Section on-time health" meta="8 sections · radar">
           <div className="p-4">
             <ReactECharts
               option={chartOpts.sectionRadar}
@@ -231,264 +180,234 @@ export const Analytics: React.FC = () => {
               opts={{ renderer: 'canvas' }}
             />
           </div>
-        </div>
+        </Panel>
       </div>
 
-      {/* ── Row 3: Weather Impact + Season Comparison ─────────────────────── */}
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-
-        {/* Weather Impact Bar */}
-        <div className="bg-white dark:bg-[#111827] border border-[rgba(15,44,92,0.10)] dark:border-white/10 rounded-xl overflow-hidden shadow-sm">
-          <div className="px-5 py-3.5 border-b border-[rgba(15,44,92,0.08)] dark:border-white/10 bg-[#F8F9FB] dark:bg-[#1f2937] flex items-center gap-2">
-            <CloudRain className="w-3.5 h-3.5 text-[#0F2C5C] dark:text-sky-400" />
-            <h3 className="text-xs font-bold text-[#0F2C5C] dark:text-white uppercase tracking-wider">
-              Weather Impact on Average Delay
-            </h3>
-          </div>
+      {/* ── Row 3: Weather Impact + Season Comparison ────────────────────── */}
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+        <Panel title="Weather impact on delay" meta="mean delay by condition">
           <div className="p-4">
             <ReactECharts
               option={chartOpts.weather}
               style={{ height: 180 }}
               opts={{ renderer: 'canvas' }}
             />
-            <div className="mt-3 flex justify-between text-[10px] font-mono text-[#5B6478] dark:text-gray-400">
-              <span>Clear → <b className="text-[#1E7F4F]">8.3 min</b></span>
-              <span>Moderate → <b className="text-[#F5821F]">14.4 min</b></span>
-              <span>Severe → <b className="text-[#C23636]">20.7 min</b></span>
+          </div>
+          <div className="grid grid-cols-3 border-t border-[rgba(15,44,92,0.10)] dark:border-white/10 divide-x divide-[rgba(15,44,92,0.10)] dark:divide-white/10">
+            <div className="px-3 py-2">
+              <div className="font-mono text-[9px] uppercase tracking-[0.14em] text-[#5B6478] dark:text-gray-400">Clear</div>
+              <div className="mt-0.5 font-mono text-[13px] font-semibold tabular-nums text-[#1E7F4F] dark:text-emerald-400">8.3 min</div>
+            </div>
+            <div className="px-3 py-2">
+              <div className="font-mono text-[9px] uppercase tracking-[0.14em] text-[#5B6478] dark:text-gray-400">Moderate</div>
+              <div className="mt-0.5 font-mono text-[13px] font-semibold tabular-nums text-[#B9790A] dark:text-amber-400">14.4 min</div>
+            </div>
+            <div className="px-3 py-2">
+              <div className="font-mono text-[9px] uppercase tracking-[0.14em] text-[#5B6478] dark:text-gray-400">Severe</div>
+              <div className="mt-0.5 font-mono text-[13px] font-semibold tabular-nums text-[#C23636] dark:text-red-400">20.7 min</div>
             </div>
           </div>
-        </div>
+        </Panel>
 
-        {/* Season Horizontal Bar */}
-        <div className="bg-white dark:bg-[#111827] border border-[rgba(15,44,92,0.10)] dark:border-white/10 rounded-xl overflow-hidden shadow-sm">
-          <div className="px-5 py-3.5 border-b border-[rgba(15,44,92,0.08)] dark:border-white/10 bg-[#F8F9FB] dark:bg-[#1f2937] flex items-center gap-2">
-            <TrendingDown className="w-3.5 h-3.5 text-[#0F2C5C] dark:text-sky-400" />
-            <h3 className="text-xs font-bold text-[#0F2C5C] dark:text-white uppercase tracking-wider">
-              Average Delay by Season
-            </h3>
-          </div>
+        <Panel title="Average delay by season" meta="% delayed">
           <div className="p-4">
             <ReactECharts
               option={chartOpts.season}
               style={{ height: 180 }}
               opts={{ renderer: 'canvas' }}
             />
-            <div className="mt-3 flex justify-between text-[10px] font-mono text-[#5B6478] dark:text-gray-400">
-              {DELAY_BY_SEASON.map(s => (
-                <span key={s.season}>
-                  {s.season}: <b style={{ color: s.color }}>{s.delayedPct}%</b>
-                </span>
-              ))}
-            </div>
           </div>
-        </div>
-      </div>
-
-      {/* ── Section Table ─────────────────────────────────────────────────── */}
-      <div className="space-y-4">
-        <SectionLabel label="Section-wise Delay Analysis" />
-        <div className="bg-white dark:bg-[#111827] border border-[rgba(15,44,92,0.10)] dark:border-white/10 rounded-xl overflow-hidden shadow-sm">
-          <div className="overflow-x-auto">
-            <table className="w-full text-left border-collapse">
-              <thead>
-                <tr className="text-[11px] font-mono uppercase text-[#5B6478] dark:text-gray-400 tracking-wider transition-colors border-b border-[rgba(15,44,92,0.10)] dark:border-white/10 bg-[#F8F9FB] dark:bg-[#1f2937]">
-                  <th className="py-3 px-4 font-medium">Section</th>
-                  <th className="py-3 px-4 font-medium">Avg Delay</th>
-                  <th className="py-3 px-4 font-medium">Delayed %</th>
-                  <th className="py-3 px-4 font-medium">On-Time %</th>
-                  <th className="py-3 px-4 font-medium">Status</th>
-                  <th className="py-3 px-4 font-medium">Health Bar</th>
-                </tr>
-              </thead>
-              <tbody className="text-xs divide-y divide-[rgba(15,44,92,0.06)] dark:divide-white/5">
-                {SECTION_DELAY_STATS.map(s => {
-                  const onTime = +(100 - s.delayedPct).toFixed(1);
-                  const barColor = s.status === 'HIGH' ? '#F5821F' : '#1E7F4F';
-                  return (
-                    <tr key={s.section} className="hover:bg-[#F8F9FB]/60 dark:hover:bg-slate-800/40 transition-colors">
-                      <td className="py-3 px-4 font-mono font-bold text-[#0F2C5C] dark:text-gray-200">{s.section}</td>
-                      <td className={`py-3 px-4 font-mono font-bold ${s.avgDelay > 10 ? 'text-[#F5821F]' : 'text-[#1E7F4F]'}`}>
-                        {s.avgDelay} min
-                      </td>
-                      <td className="py-3 px-4 font-mono text-[#C23636] dark:text-red-400 font-semibold">
-                        {s.delayedPct}%
-                      </td>
-                      <td className="py-3 px-4 font-mono text-[#1E7F4F] dark:text-emerald-400 font-semibold">
-                        {onTime}%
-                      </td>
-                      <td className="py-3 px-4">
-                        <StatusBadge status={s.status === 'HIGH' ? 'DELAYED' : 'ON TIME'} size="sm" />
-                      </td>
-                      <td className="py-3 px-4 w-32">
-                        <div className="w-full h-1.5 bg-slate-100 dark:bg-slate-800 rounded-full overflow-hidden">
-                          <div
-                            className="h-full rounded-full transition-all duration-500"
-                            style={{ width: `${onTime}%`, background: barColor }}
-                          />
-                        </div>
-                      </td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
+          <div className="flex flex-wrap items-center justify-between gap-2 border-t border-[rgba(15,44,92,0.10)] dark:border-white/10 px-4 py-2.5 font-mono text-[9px] uppercase tracking-[0.12em] text-[#5B6478] dark:text-gray-400">
+            {DELAY_BY_SEASON.map((s) => (
+              <span key={s.season}>
+                {s.season} <b className="tabular-nums" style={{ color: s.color }}>{s.delayedPct}%</b>
+              </span>
+            ))}
           </div>
-        </div>
+        </Panel>
       </div>
 
-      {/* ── Time-of-Day Summary ───────────────────────────────────────────── */}
-      <div className="space-y-4">
-        <SectionLabel label="Delay by Time of Day" />
-        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-          {DELAY_BY_TIME_BUCKET.map(t => (
-            <div
-              key={t.bucket}
-              className="bg-white dark:bg-[#111827] border border-[rgba(15,44,92,0.10)] dark:border-white/10 rounded-xl p-4 shadow-sm flex items-center justify-between"
-            >
-              <div className="flex items-center gap-3">
-                <Clock className="w-4 h-4 text-[#5B6478] dark:text-gray-400" />
-                <div>
-                  <div className="text-xs font-semibold text-[#0F2C5C] dark:text-white">{t.bucket}</div>
-                  <div className="text-[10px] text-[#5B6478] dark:text-gray-400">{t.delayedPct}% delayed</div>
-                </div>
-              </div>
-              <div className="text-right">
-                <div
-                  className="font-mono text-lg font-bold"
-                  style={{ color: t.color }}
-                >
-                  {t.avgDelay} min
-                </div>
-                <div className="text-[10px] text-[#5B6478] dark:text-gray-400">avg delay</div>
-              </div>
-            </div>
-          ))}
+      {/* ── Section Table ────────────────────────────────────────────────── */}
+      <div className="space-y-3">
+        <div className={SECTION_LABEL}>
+          <span className="w-[3px] h-3 bg-[#2F5FD1] dark:bg-sky-400" aria-hidden="true" />
+          Section-wise delay analysis
         </div>
+
+        <Panel title="Section register" meta="ranked by delay rate" bodyClassName="overflow-x-auto">
+          <table className="w-full text-left border-collapse">
+            <thead>
+              <tr className={THEAD}>
+                <th className="py-2.5 px-4 font-medium">Section</th>
+                <th className="py-2.5 px-4 font-medium">Avg delay</th>
+                <th className="py-2.5 px-4 font-medium">Delayed %</th>
+                <th className="py-2.5 px-4 font-medium">On-time %</th>
+                <th className="py-2.5 px-4 font-medium">Status</th>
+                <th className="py-2.5 px-4 font-medium">Health</th>
+              </tr>
+            </thead>
+            <tbody>
+              {SECTION_DELAY_STATS.map((s) => {
+                const onTime = +(100 - s.delayedPct).toFixed(1);
+                const barColor = s.status === 'HIGH' ? '#B9790A' : '#1E7F4F';
+                return (
+                  <tr key={s.section} className={TROW}>
+                    <td className="py-2.5 px-4 font-mono text-[11px] font-semibold text-[#0F2C5C] dark:text-gray-200">
+                      {s.section}
+                    </td>
+                    <td className={`py-2.5 px-4 font-mono text-[11px] tabular-nums font-semibold ${
+                      s.avgDelay > 10 ? 'text-[#B9790A] dark:text-amber-400' : 'text-[#1E7F4F] dark:text-emerald-400'
+                    }`}>
+                      {s.avgDelay} min
+                    </td>
+                    <td className="py-2.5 px-4 font-mono text-[11px] tabular-nums font-semibold text-[#C23636] dark:text-red-400">
+                      {s.delayedPct}%
+                    </td>
+                    <td className="py-2.5 px-4 font-mono text-[11px] tabular-nums font-semibold text-[#1E7F4F] dark:text-emerald-400">
+                      {onTime}%
+                    </td>
+                    <td className="py-2.5 px-4">
+                      <StatusBadge status={s.status === 'HIGH' ? 'DELAYED' : 'ON TIME'} size="sm" />
+                    </td>
+                    <td className="py-2.5 px-4 w-32">
+                      <div className="h-[3px] w-full bg-[rgba(15,44,92,0.08)] dark:bg-white/10">
+                        <div
+                          className="h-full transition-all duration-500"
+                          style={{ width: `${onTime}%`, background: barColor }}
+                        />
+                      </div>
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </Panel>
       </div>
 
-      {/* ── ML Prediction Feed ────────────────────────────────────────────── */}
-      <div className="space-y-4">
-        <SectionLabel label="AI Model Predictions · Live Inference Scenarios" />
-        <div className="space-y-3">
-          {ML_PREDICTIONS.map(pred => (
+      {/* ── Time-of-Day Summary ──────────────────────────────────────────── */}
+      <div className="space-y-3">
+        <div className={SECTION_LABEL}>
+          <span className="w-[3px] h-3 bg-[#2F5FD1] dark:bg-sky-400" aria-hidden="true" />
+          Delay by time of day
+        </div>
+        <KpiRail columns={3} items={timeKpis} />
+      </div>
+
+      {/* ── ML Prediction Feed ───────────────────────────────────────────── */}
+      <div className="space-y-3">
+        <div className={SECTION_LABEL}>
+          <span className="w-[3px] h-3 bg-[#2F5FD1] dark:bg-sky-400" aria-hidden="true" />
+          AI model predictions · live inference scenarios
+        </div>
+
+        <Panel
+          title="Prediction feed"
+          meta={`${ML_PREDICTIONS.length} scenarios`}
+          bodyClassName="divide-y divide-[rgba(15,44,92,0.08)] dark:divide-white/[0.06]"
+        >
+          {ML_PREDICTIONS.map((pred) => (
             <div
               key={pred.id}
-              className={`bg-white dark:bg-[#111827] border rounded-xl p-4 shadow-sm flex flex-col sm:flex-row sm:items-start sm:justify-between gap-3 transition-all ${
-                pred.isDelayed
-                  ? 'border-[#C23636]/30 hover:border-[#C23636]/60'
-                  : 'border-[#1E7F4F]/30 hover:border-[#1E7F4F]/60'
-              }`}
+              className="px-4 py-3 flex flex-col sm:flex-row sm:items-start sm:justify-between gap-3 hover:bg-[#F6F8FB] dark:hover:bg-white/[0.02] transition-colors"
             >
-              {/* Left: prediction info */}
               <div className="flex items-start gap-3 min-w-0">
-                <div className={`w-9 h-9 rounded-lg flex items-center justify-center shrink-0 ${
-                  pred.isDelayed ? 'bg-red-50 dark:bg-red-950/30' : 'bg-emerald-50 dark:bg-emerald-950/30'
-                }`}>
-                  {pred.isDelayed
-                    ? <AlertTriangle className="w-4 h-4 text-[#C23636] dark:text-red-400" />
-                    : <CheckCircle2 className="w-4 h-4 text-[#1E7F4F] dark:text-emerald-400" />
-                  }
-                </div>
+                <span
+                  className={`mt-[3px] w-[3px] h-6 shrink-0 ${
+                    pred.isDelayed ? 'bg-[#C23636] dark:bg-red-400' : 'bg-[#1E7F4F] dark:bg-emerald-400'
+                  }`}
+                  aria-hidden="true"
+                />
                 <div className="min-w-0">
-                  {/* Tags row */}
-                  <div className="flex flex-wrap items-center gap-1.5 mb-1.5">
-                    <span className="font-mono text-[10px] font-bold text-[#2F5FD1] dark:text-sky-300 bg-[#2F5FD1]/10 px-1.5 py-0.5 rounded">
-                      {pred.trainType}
-                    </span>
-                    <span className="font-mono text-[10px] text-[#5B6478] dark:text-gray-400 bg-slate-100 dark:bg-slate-800 px-1.5 py-0.5 rounded">
-                      {pred.section}
-                    </span>
-                    <span className="font-mono text-[10px] text-[#5B6478] dark:text-gray-400 bg-slate-100 dark:bg-slate-800 px-1.5 py-0.5 rounded">
-                      {pred.season}
-                    </span>
-                    <span className={`font-mono text-[10px] font-semibold px-1.5 py-0.5 rounded ${weatherColors[pred.weather] || ''}`}>
-                      {pred.weather} ☁
-                    </span>
-                    <span className="font-mono text-[10px] text-[#5B6478] dark:text-gray-400 bg-slate-100 dark:bg-slate-800 px-1.5 py-0.5 rounded">
-                      {pred.timeBucket}
-                    </span>
+                  <div className="flex flex-wrap items-center gap-1 mb-1.5">
+                    <span className={tag('info')}>{pred.trainType}</span>
+                    <span className={tag('muted')}>{pred.section}</span>
+                    <span className={tag('muted')}>{pred.season}</span>
+                    <span className={tag(weatherTone[pred.weather] ?? 'muted')}>{pred.weather}</span>
+                    <span className={tag('muted')}>{pred.timeBucket}</span>
                   </div>
-                  <p className="text-xs text-[#0F2C5C] dark:text-gray-200 leading-relaxed">
+                  <p className="text-[11px] leading-relaxed text-[#0F2C5C] dark:text-gray-300">
                     {pred.description}
                   </p>
                 </div>
               </div>
 
-              {/* Right: stats */}
-              <div className="flex sm:flex-col items-center sm:items-end gap-4 sm:gap-1.5 shrink-0">
+              <div className="flex sm:flex-col items-center sm:items-end gap-4 sm:gap-1 shrink-0 pl-6 sm:pl-0">
                 <div className="text-center sm:text-right">
-                  <div className={`font-mono text-lg font-bold ${
+                  <div className={`font-mono text-[15px] font-semibold tabular-nums ${
                     pred.isDelayed ? 'text-[#C23636] dark:text-red-400' : 'text-[#1E7F4F] dark:text-emerald-400'
                   }`}>
-                    {pred.isDelayed ? `+${pred.predictedDelay} min` : `${pred.predictedDelay} min`}
+                    {pred.isDelayed ? `+${pred.predictedDelay}` : pred.predictedDelay} min
                   </div>
-                  <div className="text-[10px] text-[#5B6478] dark:text-gray-400">predicted delay</div>
+                  <div className="font-mono text-[9px] uppercase tracking-[0.14em] text-[#5B6478] dark:text-gray-400">
+                    predicted delay
+                  </div>
                 </div>
                 <div className="text-center sm:text-right">
-                  <div className="font-mono text-sm font-bold text-[#0F2C5C] dark:text-white">
+                  <div className="font-mono text-[11px] font-semibold tabular-nums text-[#0F2C5C] dark:text-white">
                     {pred.confidence}%
                   </div>
-                  <div className="text-[10px] text-[#5B6478] dark:text-gray-400">confidence</div>
+                  <div className="font-mono text-[9px] uppercase tracking-[0.14em] text-[#5B6478] dark:text-gray-400">
+                    confidence
+                  </div>
                 </div>
-                <span className={`font-mono text-[10px] font-bold px-2 py-1 rounded ${
-                  pred.isDelayed
-                    ? 'bg-red-100 dark:bg-red-950/50 text-[#C23636] dark:text-red-400'
-                    : 'bg-emerald-100 dark:bg-emerald-950/50 text-[#1E7F4F] dark:text-emerald-400'
-                }`}>
-                  {pred.isDelayed ? '⚠ DELAYED' : '✓ ON TIME'}
+                <span className={tag(pred.isDelayed ? 'danger' : 'positive')}>
+                  {pred.isDelayed ? 'Delayed' : 'On time'}
                 </span>
               </div>
             </div>
           ))}
-        </div>
+        </Panel>
 
-        {/* AI insight footer */}
-        <div className="bg-gradient-to-r from-[#0F2C5C]/5 via-[#2F5FD1]/5 to-transparent dark:from-[#2F5FD1]/10 dark:to-transparent border border-[#2F5FD1]/20 rounded-xl p-4 flex items-start gap-3">
-          <Zap className="w-4 h-4 text-[#2F5FD1] dark:text-sky-400 shrink-0 mt-0.5" />
-          <div className="space-y-1">
-            <div className="text-xs font-bold text-[#0F2C5C] dark:text-white">
-              AI Model Insights
+        <div className="flex items-start gap-3 border border-[#2F5FD1]/25 dark:border-sky-400/25 bg-[#2F5FD1]/[0.04] dark:bg-sky-400/[0.06] px-4 py-3">
+          <Zap className="w-4 h-4 shrink-0 mt-0.5 text-[#2F5FD1] dark:text-sky-400" />
+          <div>
+            <div className="font-mono text-[9px] font-bold uppercase tracking-[0.16em] text-[#0F2C5C] dark:text-white">
+              Model insights
             </div>
-            <p className="text-xs text-[#5B6478] dark:text-gray-400 leading-relaxed">
-              The <b className="text-[#0F2C5C] dark:text-white">RandomForest classifier</b> achieves <b className="text-[#1E7F4F]">87.17% accuracy</b> identifying delayed trains.
-              The <b className="text-[#0F2C5C] dark:text-white">HistGradientBoosting regressor</b> predicts delay magnitude with just <b className="text-[#1E7F4F]">1.59 min MAE</b> and R² = 0.878.
-              Key delay drivers: <b>Freight trains</b> (81.7% delayed), <b>SHE-SKG section</b> (worst on-time, 56.6% delay), <b>Winter &amp; Monsoon</b> seasons, and <b>Severe weather</b> (20.7 min avg delay vs 8.3 min clear).
+            <p className="mt-1 text-[11px] leading-relaxed text-[#5B6478] dark:text-gray-400">
+              The RandomForest classifier reaches 87.17% accuracy separating delayed from on-time
+              runs; the HistGradientBoosting regressor estimates magnitude at 1.59 min MAE
+              (R² 0.878). Delay is driven by Freight traffic (81.7% delayed), the SHE-SKG section
+              (56.6% delayed), Winter and Monsoon seasons, and severe weather at 20.7 min average.
             </p>
           </div>
         </div>
       </div>
 
-      {/* ── Live Departure Schedule ───────────────────────────────────────── */}
-      <div className="space-y-4">
-        <SectionLabel label="Live Departure Schedule" />
-        <div className="bg-white dark:bg-[#111827] border border-[rgba(15,44,92,0.10)] dark:border-white/10 rounded-xl overflow-hidden shadow-sm">
-          <div className="overflow-x-auto">
-            <table className="w-full text-left border-collapse">
-              <thead>
-                <tr className="text-[11px] font-mono uppercase text-[#5B6478] dark:text-gray-400 tracking-wider border-b border-[rgba(15,44,92,0.10)] dark:border-white/10 bg-[#F8F9FB] dark:bg-[#1f2937]">
-                  <th className="py-2.5 px-4 font-medium">Train</th>
-                  <th className="py-2.5 px-4 font-medium">Destination</th>
-                  <th className="py-2.5 px-4 font-medium">Platform</th>
-                  <th className="py-2.5 px-4 font-medium">Scheduled</th>
-                  <th className="py-2.5 px-4 font-medium">Status</th>
-                </tr>
-              </thead>
-              <tbody className="text-xs divide-y divide-[rgba(15,44,92,0.06)] dark:divide-white/5">
-                {departures.map((row) => (
-                  <tr key={row.trainNo} className="hover:bg-[#F8F9FB]/50 dark:hover:bg-slate-800/40 transition-colors">
-                    <td className="py-3.5 px-4 font-mono font-bold text-[#0F2C5C] dark:text-gray-200">{row.trainNo}</td>
-                    <td className="py-3.5 px-4 font-medium text-[#0F2C5C] dark:text-gray-200">{row.destination}</td>
-                    <td className="py-3.5 px-4 font-mono text-[#0F2C5C] dark:text-gray-200">{row.platform}</td>
-                    <td className="py-3.5 px-4 font-mono text-[#0F2C5C] dark:text-gray-200">{row.scheduledDeparture ?? row.etd}</td>
-                    <td className="py-3.5 px-4">
-                      <StatusBadge status={row.status} size="sm" />
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
+      {/* ── Live Departure Schedule ──────────────────────────────────────── */}
+      <div className="space-y-3">
+        <div className={SECTION_LABEL}>
+          <span className="w-[3px] h-3 bg-[#2F5FD1] dark:bg-sky-400" aria-hidden="true" />
+          Live departure schedule
         </div>
+
+        <Panel title="Next departures" meta={`${departures.length} of ${trains.length} tracked`} bodyClassName="overflow-x-auto">
+          <table className="w-full text-left border-collapse">
+            <thead>
+              <tr className={THEAD}>
+                <th className="py-2.5 px-4 font-medium">Train</th>
+                <th className="py-2.5 px-4 font-medium">Destination</th>
+                <th className="py-2.5 px-4 font-medium">Platform</th>
+                <th className="py-2.5 px-4 font-medium">Scheduled</th>
+                <th className="py-2.5 px-4 font-medium">Status</th>
+              </tr>
+            </thead>
+            <tbody>
+              {departures.map((row) => (
+                <tr key={row.trainNo} className={TROW}>
+                  <td className="py-2.5 px-4 font-mono text-[11px] font-semibold text-[#0F2C5C] dark:text-gray-200">{row.trainNo}</td>
+                  <td className="py-2.5 px-4 text-[11px] text-[#0F2C5C] dark:text-gray-300">{row.destination}</td>
+                  <td className="py-2.5 px-4 font-mono text-[11px] tabular-nums text-[#0F2C5C] dark:text-gray-300">{row.platform}</td>
+                  <td className="py-2.5 px-4 font-mono text-[11px] tabular-nums text-[#0F2C5C] dark:text-gray-300">{row.scheduledDeparture ?? row.etd}</td>
+                  <td className="py-2.5 px-4">
+                    <StatusBadge status={row.status} size="sm" />
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </Panel>
       </div>
 
     </div>

@@ -9,7 +9,7 @@ Amogh Rail is a comprehensive ML-powered dashboard and inference system designed
 - **Delay Prediction Engine**: A two-stage ML pipeline featuring a `RandomForestClassifier` and a `HistGradientBoostingRegressor` to predict delay probability and magnitude based on weather, congestion, and upstream delays.
 - **Dispatch Optimization**: Uses Google OR-Tools CP-SAT to calculate the optimal train schedule, minimizing priority-weighted wait times compared to standard FIFO (First-In-First-Out) dispatching.
 - **Interactive Dashboard**: A React-based web interface built with Vite, Tailwind CSS, and ECharts for visualizing network traffic, delays, and schedule efficiency.
-- **AMOGH AI Assistant**: An AI-powered Station Master (via NVIDIA Llama-3.1 API) capable of answering complex queries about the Howrah-Burdwan network and providing actionable insights.
+- **AMOGH AI Assistant**: An AI-powered Station Master (via NVIDIA Nemotron 3.5 Super 120B) capable of answering complex queries about the Howrah-Burdwan network and providing actionable insights.
 
 ## 🛠️ Tech Stack
 
@@ -39,10 +39,18 @@ Amogh Rail is a comprehensive ML-powered dashboard and inference system designed
    pip install ortools simpy  # Required for the optimization engine
    ```
 
-3. Set up your environment variables by adding your NVIDIA API key for the AI assistant in the `.env` file (`api/.env`):
+3. Set up your environment variables in the `.env` file (`api/.env`). Copy the template:
+   ```bash
+   cp api/.env.example api/.env
+   ```
    ```env
    NVIDIA_API_KEY=your_api_key_here
+   NVIDIA_MODEL=nvidia/nemotron-3.5-super-vl-120b-a12b
+   NVIDIA_TIMEOUT=30
    ```
+   `api/.env` is git-ignored — never commit a real key.
+   `NVIDIA_MODEL` is optional (that is the default). Reasoning/thinking is disabled in
+   `_complete()` for low-latency replies; any other NIM chat model can be swapped in here.
 
 4. Start the FastAPI server:
    ```bash
@@ -62,6 +70,20 @@ Amogh Rail is a comprehensive ML-powered dashboard and inference system designed
    npm run dev
    ```
    The frontend will be accessible at the localhost port provided by Vite (usually `http://localhost:5173`).
+
+### UI design system
+
+Dashboard, ML Inference, Analytics and Optimization share one "dispatcher signal board"
+vocabulary, built from `src/components/dashboard/`:
+
+- `Panel.tsx` — hairline instrument panel (the structural unit; no shadows, no rounded corners)
+- `KpiRail.tsx` — divided metric rail with an optional calibrated meter and threshold tick
+- `PageHeader.tsx` — eyebrow, title, hairline rule and the right-hand action cluster
+- `theme.ts` — shared class tokens (`PAGE`, `FIELD`, `THEAD`, `TROW`, `tag()`), so hairlines,
+  type scale and status chips stay identical across pages
+
+Dark mode is a real theme, not an inversion: `#0C1424` panels on a `#0F172A` field with
+signal amber/green accents and tabular JetBrains Mono figures.
 
 ## 📊 ML Models & Data Insights
 

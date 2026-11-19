@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Sun, Moon, ArrowRight, X, Shield, Activity, Zap } from 'lucide-react';
+import { Sun, Moon, ArrowRight, X } from 'lucide-react';
 
 interface LandingProps {
   onNavigateLogin?: () => void;

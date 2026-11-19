@@ -1,30 +1,36 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { Send, Loader2, Bot, ChevronDown, Train, Command, Sun, Moon } from 'lucide-react';
+import { useSystem } from '../../context/SystemContext';
 
 interface Message {
   role: 'user' | 'assistant';
   content: string;
   ts?: string;
+  tools?: string[];
 }
 
 const SUGGESTED_PROMPTS = [
-  'Highest delay section?',
-  'Should we hold the freight train?',
-  'What is the ML model accuracy?',
-  'Explain critical load.'
+  'Worst section right now?',
+  'Which trains are late?',
+  'Predict freight delay in SHE-SKG',
+  'Should we hold the 12627?'
 ];
+
+const API_BASE = import.meta.env.VITE_API_URL ?? 'http://localhost:8000';
 
 const now = () =>
   new Date().toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' });
 
+const prettyTool = (name: string) => name.replace(/_/g, ' ');
+
 export const SherlockChat: React.FC = () => {
+  const { trains, alerts, aiRecommendations, simulation } = useSystem();
   const [isOpen, setIsOpen] = useState(false);
   const [isDark, setIsDark] = useState(true);
-  const [messages, setMessages] = useState<Message[]>([
+  const [messages, setMessages] = useState<Message[]>(() => [
     {
       role: 'assistant',
-      content:
-        "I'm the Amogh Station Master. I monitor 142 active trains across the network using real-time data and predictive ML. How can I assist you today?",
+      content: `I'm the Amogh Station Master. I'm tracking ${trains.length} live trains on the Howrah–Burdwan line, and I can run the delay model for any what-if question. How can I assist?`,
       ts: now(),
     },
   ]);
@@ -54,19 +60,55 @@ export const SherlockChat: React.FC = () => {
     setIsTyping(true);
     setDisplayedText('');
     let i = 0;
-    const speed = Math.max(8, Math.min(25, 1200 / text.length));
+    // Reveal in chunks over ~90 frames so long answers don't crawl.
+    const step = Math.max(1, Math.ceil(text.length / 90));
     const interval = setInterval(() => {
       if (i < text.length) {
-        setDisplayedText(text.slice(0, i + 1));
-        i++;
+        i = Math.min(text.length, i + step);
+        setDisplayedText(text.slice(0, i));
       } else {
         clearInterval(interval);
         setIsTyping(false);
         onDone();
       }
-    }, speed);
+    }, 18);
     return () => clearInterval(interval);
   };
+
+  const buildSnapshot = () => ({
+    trains: trains.map(t => ({
+      trainNo: t.trainNo,
+      name: t.name,
+      trainType: t.trainType,
+      sectionId: t.sectionId ?? t.location,
+      status: t.status,
+      delayMinutes: t.delayMinutes,
+      scheduledTime: t.scheduledTime,
+      platform: t.platform,
+      speed: t.speed,
+      destination: t.destination,
+    })),
+    alerts: alerts.map(a => ({
+      severity: a.severity,
+      message: a.message,
+      location: a.location,
+      timestamp: a.timestamp,
+    })),
+    recommendations: aiRecommendations.map(r => ({
+      type: r.type,
+      title: r.title,
+      description: r.description,
+      savings: r.savings,
+      confidence: r.confidence,
+      location: r.location,
+    })),
+    simulation: {
+      progressPercent: simulation.progressPercent,
+      conflictsResolved: simulation.conflictsResolved,
+      efficiencyGain: simulation.efficiencyGain,
+      isRunning: simulation.isRunning,
+    },
+  });
 
   const sendMessage = async (text: string) => {
     if (!text.trim() || isLoading || isTyping) return;
@@ -78,35 +120,42 @@ export const SherlockChat: React.FC = () => {
     setIsLoading(true);
 
     try {
-      const res = await fetch('http://localhost:8000/chat', {
+      const res = await fetch(`${API_BASE}/chat`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           messages: updatedHistory.map(m => ({ role: m.role, content: m.content })),
+          context: buildSnapshot(),
         }),
       });
       const data = await res.json();
+      if (!res.ok) throw new Error(data.detail || `Request failed (${res.status})`);
       const reply = data.response || 'No response received.';
+      const tools: string[] = Array.isArray(data.tools_used) ? data.tools_used : [];
 
-      setMessages(prev => [...prev, { role: 'assistant', content: '', ts: now() }]);
+      setMessages(prev => [...prev, { role: 'assistant', content: '', ts: now(), tools }]);
       setIsLoading(false);
 
       typewriterEffect(reply, () => {
         setMessages(prev => {
           const copy = [...prev];
-          copy[copy.length - 1] = { role: 'assistant', content: reply, ts: now() };
+          copy[copy.length - 1] = { role: 'assistant', content: reply, ts: now(), tools };
           return copy;
         });
         setDisplayedText('');
         if (!isOpen) setUnread(n => n + 1);
       });
-    } catch {
+    } catch (err) {
       setIsLoading(false);
+      const detail = err instanceof Error ? err.message : String(err);
+      const isNetwork = err instanceof TypeError;
       setMessages(prev => [
         ...prev,
         {
           role: 'assistant',
-          content: 'Could not reach the API server. Make sure uvicorn is running on port 8000.',
+          content: isNetwork
+            ? `Could not reach the API server at ${API_BASE}. Make sure uvicorn is running.`
+            : `Assistant error: ${detail}`,
           ts: now(),
         },
       ]);
@@ -235,6 +284,29 @@ export const SherlockChat: React.FC = () => {
                         }`} />
                       )}
                     </div>
+                    {msg.tools && msg.tools.length > 0 && !isLastAndTyping && (
+                      <div className="flex flex-wrap items-center gap-1 px-1">
+                        <span
+                          className={`text-[9px] uppercase tracking-wider ${
+                            isDark ? 'text-slate-500' : 'text-slate-400'
+                          }`}
+                        >
+                          checked
+                        </span>
+                        {[...new Set(msg.tools)].map(tool => (
+                          <span
+                            key={tool}
+                            className={`font-mono text-[9px] px-1.5 py-0.5 border rounded ${
+                              isDark
+                                ? 'border-slate-700 text-slate-400'
+                                : 'border-slate-200 text-slate-500'
+                            }`}
+                          >
+                            {prettyTool(tool)}
+                          </span>
+                        ))}
+                      </div>
+                    )}
                     {msg.ts && !isLastAndTyping && (
                       <span className={`text-[10px] font-medium px-1 transition-colors duration-300 ${
                         isDark ? 'text-slate-500' : 'text-slate-400'
